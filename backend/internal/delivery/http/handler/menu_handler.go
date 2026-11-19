@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"tapkasir-pos/internal/delivery/http/middleware"
 	"tapkasir-pos/internal/model"
 
 	"github.com/gin-gonic/gin"
@@ -15,17 +16,21 @@ type MenuHandler struct {
 }
 
 // Dependency Injection: Inject usecase ke handler
-func NewMenuHandler(r *gin.Engine, us model.MenuUsecase) {
+func NewMenuHandler(r *gin.Engine, us model.MenuUsecase, jwtSecret string) {
 	handler := &MenuHandler{
 		menuUsecase: us,
 	}
-
-	// Daftarkan route
+	// 1. Route Publik: Pelanggan scan QR & Layar Kasir standby bebas melihat menu
 	r.GET("/api/menu", handler.FetchMenu)
 	r.GET("/api/menu/:id", handler.FetchMenuByID)
-	r.POST("/api/menu", handler.TambahMenu)
-	r.PUT("/api/menu/:id", handler.UpdateMenu)
-	r.DELETE("/api/menu/:id", handler.HapusMenu)
+	// 2. Route Sensitif: Tambah, edit harga/status, dan hapus menu membutuhkan PIN Manager atau Owner
+	sensitiveMenu := r.Group("/api/menu")
+	sensitiveMenu.Use(middleware.RequireRole(jwtSecret, "owner", "manager"))
+	{
+		sensitiveMenu.POST("", handler.TambahMenu)
+		sensitiveMenu.PUT("/:id", handler.UpdateMenu)
+		sensitiveMenu.DELETE("/:id", handler.HapusMenu)
+	}
 }
 
 func (h *MenuHandler) FetchMenu(c *gin.Context) {
